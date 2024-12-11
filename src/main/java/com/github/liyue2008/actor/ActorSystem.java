@@ -152,6 +152,11 @@ public class ActorSystem{
             return this;
         }
 
+        public Builder addActors(Collection<Actor> actors) {
+            this.actorList.addAll(actors);
+            return this;
+        }
+
         public ActorSystem build() {
             return new ActorSystem(threadCount, actorList, name);
         }

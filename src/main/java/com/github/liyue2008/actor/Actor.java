@@ -28,6 +28,10 @@ public class Actor {
 
     private final boolean enableMetric;
 
+    /**
+     * 判断Actor是否使用私有线程
+     * @return 如果使用私有线程返回true，否则返回false
+     */
     public boolean isPrivateThread() {
         return privateThread;
     }
@@ -44,6 +48,11 @@ public class Actor {
         this.enableMetric = enableMetric;
     }
 
+    /**
+     * 获取指定主题的收件箱队列大小
+     * @param topic 消息主题
+     * @return 队列中的消息数量
+     */
     public int getInboxQueueSize(String topic) {
         return inbox.getQueueSize(topic);
     }
@@ -83,7 +92,7 @@ public class Actor {
         inbox.addActorListener(topic, handler);
     }
     /**
-     * 添加有2个参数的消息处理函数，函数返回值将作为响应消息发送给发送者
+     * 添加有2个参数的消息理函数，函数返回值将作为响应消息发送给发送者
      * @param topic 消息主题
      * @param handler 消息处理函数
      * @param <T> 第一个参数类型
@@ -126,6 +135,12 @@ public class Actor {
         inbox.addActorSubscriber(topic, consumer);
     }
 
+    /**
+     * 添加定时任务
+     * @param interval 时间间隔
+     * @param timeUnit 时间单位
+     * @param runnable 要执行的任务
+     */
     public void addActorScheduler(long interval, TimeUnit timeUnit,Runnable runnable) {
         String topic = runnable.getClass().getName() + "#run()";
         addActorScheduler( new ScheduleTask(timeUnit, interval, this.addr, topic), runnable);
@@ -140,12 +155,22 @@ public class Actor {
         addActorScheduler(request.getInterval(), request.getTimeUnit(), request.getRunnable());
     }
 
+    /**
+     * 延迟执行任务
+     * @param delay 延迟时间
+     * @param timeUnit 时间单位
+     * @param runnable 要执行的任务
+     */
     public void runDelay(long delay, TimeUnit timeUnit,  Runnable runnable) {
         String topic = runnable.getClass().getName() + "#run()";
         inbox.receive(new ActorMsg(0L, addr,addr,"@addActorListener", topic, runnable));
         send("Scheduler", "addDelayTask", new DelayTask(timeUnit, delay, this.addr, topic));
     }
 
+    /**
+     * 移除定时任务
+     * @param runnable 要移除的任务
+     */
     public void removeScheduler(Runnable runnable) {
         String topic = runnable.getClass().getName() + "#run()";
         inbox.receive(new ActorMsg(0L, addr,addr,"@removeActorListener", topic, runnable));
@@ -163,50 +188,155 @@ public class Actor {
         inbox.setHandlerInstance(handlerInstance);
     }
 
+    /**
+     * 向指定主题发布消息
+     * @param topic 消息主题
+     * @param payload 消息内容
+     * @return 发送的消息对象
+     */
     public ActorMsg pub(String topic, Object payload) {
         return send(PubSubActor.ADDR, topic, payload);
     }
+
+    /**
+     * 向指定主题发布无内容消息
+     * @param topic 消息主题
+     * @return 发送的消息对象
+     */
     public ActorMsg pub(String topic) {
         return send(PubSubActor.ADDR, topic);
     }
+
+    /**
+     * 向指定主题发布多个消息内容
+     * @param topic 消息主题
+     * @param payloads 多个消息内容
+     * @return 发送的消息对象
+     */
     public ActorMsg pub(String topic, Object... payloads) {
         return send(PubSubActor.ADDR, topic, payloads);
     }
 
+    /**
+     * 异步发布消息并返回CompletableFuture
+     * @param topic 消息主题
+     * @return 异步操作的CompletableFuture
+     */
     public CompletableFuture<Void> pubThen(String topic) {
         return this.<CompletableFuture<Void>>sendThen(PubSubActor.ADDR, topic).thenCompose(f -> f);
     }
+
+    /**
+     * 异步发布多个消息内容并返回CompletableFuture
+     * @param topic 消息主题
+     * @param payloads 多个消息内容
+     * @return 异步操作的CompletableFuture
+     */
     public CompletableFuture<Void> pubThen(String topic, Object... payloads) {
         return this.<CompletableFuture<Void>>sendThen(PubSubActor.ADDR, topic, payloads).thenCompose(f -> f);
     }
 
+    /**
+     * 发送消息到指定地址和主题
+     * @param addr 目标地址
+     * @param topic 消息主题
+     * @return 发送的消息对象
+     */
     public ActorMsg send(String addr, String topic) {
         return send(addr, topic, ActorMsg.Response.DEFAULT);
     }
+
+    /**
+     * 发送消息到指定地址和主题，并指定响应类型
+     * @param addr 目标地址
+     * @param topic 消息主题
+     * @param response 响应类型
+     * @return 发送的消息对象
+     */
     public ActorMsg send(String addr, String topic, ActorMsg.Response response) {
         return send(addr, topic, response, new Object[]{});
     }
+
+    /**
+     * 发送消息和内容到指定地址和主题
+     * @param addr 目标地址
+     * @param topic 消息主题
+     * @param payloads 消息内容
+     * @return 发送的消息对象
+     */
     public ActorMsg send(String addr, String topic, Object... payloads) {
         return send(addr, topic,ActorMsg.Response.DEFAULT, payloads);
     }
+
+    /**
+     * 发送消息到指定地址和主题，并指定响应类型和消息内容
+     * @param addr 目标地址
+     * @param topic 消息主题
+     * @param response 响应类型
+     * @param payloads 消息内容
+     * @return 发送的消息对象
+     */
     public ActorMsg send(String addr, String topic, ActorMsg.Response response, Object... payloads) {
         return outbox.send(addr, topic, response, payloads);
     }
+
+    /**
+     * 发送消息到指定地址和主题，并指定响应类型和拒绝策略
+     * @param addr 目标地址
+     * @param topic 消息主题
+     * @param response 响应类型
+     * @param rejectPolicy 拒绝策略
+     * @param payloads 消息内容
+     * @return 发送的消息对象
+     */
     public ActorMsg send(String addr, String topic, ActorMsg.Response response, ActorRejectPolicy rejectPolicy, Object... payloads) {
         return outbox.send(addr, topic, response, rejectPolicy, payloads);
     }
 
+    /**
+     * 异步发送消息并返回CompletableFuture
+     * @param addr 目标地址
+     * @param topic 消息主题
+     * @param <T> 返回值类型
+     * @return 异步操作的CompletableFuture
+     */
     public <T> CompletableFuture<T> sendThen(String addr, String topic) {
         return sendThen(addr, topic, ActorRejectPolicy.EXCEPTION);
     }
+
+    /**
+     * 异步发送消息并指定拒绝策略
+     * @param addr 目标地址
+     * @param topic 消息主题
+     * @param rejectPolicy 拒绝策略
+     * @param <T> 返回值类型
+     * @return 异步操作的CompletableFuture
+     */
     public <T> CompletableFuture<T> sendThen(String addr, String topic, ActorRejectPolicy rejectPolicy) {
         return sendThen(addr, topic, rejectPolicy, new Object[]{});
     }
 
+    /**
+     * 异步发送消息和内容
+     * @param addr 目标地址
+     * @param topic 消息主题
+     * @param payloads 消息内容
+     * @param <T> 返回值类型
+     * @return 异步操作的CompletableFuture
+     */
     public <T> CompletableFuture<T> sendThen(String addr, String topic, Object... payloads) {
         return sendThen(addr, topic, ActorRejectPolicy.EXCEPTION,payloads);
     }
 
+    /**
+     * 异步发送消息���并指定拒绝策略和消息内容
+     * @param addr 目标地址
+     * @param topic 消息主题
+     * @param rejectPolicy 拒绝策略
+     * @param payloads 消息内容
+     * @param <T> 返回值类型
+     * @return 异步操作的CompletableFuture
+     */
     public <T> CompletableFuture<T> sendThen(String addr, String topic, ActorRejectPolicy rejectPolicy, Object... payloads) {
         return responseSupport.send(addr, topic, rejectPolicy, payloads);
     }
@@ -219,10 +349,20 @@ public class Actor {
         responseSupport.setHandlerInstance(handlerInstance);
     }
 
+    /**
+     * 回复请求消息
+     * @param request 原始请求消息
+     * @param result 响应结果
+     */
     public void reply(ActorMsg request, Object result) {
         responseSupport.reply(request, result);
     }
 
+    /**
+     * 回复异常信息
+     * @param request 原始请求消息
+     * @param throwable 异常信息
+     */
     public void replyException(ActorMsg request, Throwable throwable) {
         responseSupport.replyException(request, throwable);
     }
@@ -240,6 +380,10 @@ public class Actor {
         return outbox;
     }
 
+    /**
+     * 获取Actor构建器
+     * @return Actor构建器实例
+     */
     public static Builder builder() {
         return new Builder();
     }
@@ -252,6 +396,10 @@ public class Actor {
         return inbox.cleared();
     }
 
+    /**
+     * 判断是否启用了指标收集
+     * @return 如果启用了指标收集返回true，否则返回false
+     */
     public boolean isEnableMetric() {
         return enableMetric;
     }
